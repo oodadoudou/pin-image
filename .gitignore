@@ -1,0 +1,69 @@
+# Gradle and Kotlin generated state
+.gradle/
+.gradle-home/
+.kotlin/
+**/build/
+
+# Local Android configuration and native build output
+local.properties
+.cxx/
+.externalNativeBuild/
+.navigation/
+captures/
+
+# Android Studio / IntelliJ user state
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Signing keys and machine-local secrets
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing.properties
+secrets.properties
+google-services.json
+.env
+.env.*
+!.env.example
+
+# Local development toolchains and emulator data
+.android-sdk/
+.android-avd/
+.toolchains/
+
+# Agent / coding assistant working files
+.claude/
+.opencode/
+.aider*
+.continue/
+.cursor/
+.windsurf/
+.codex-artifacts/
+
+# Local product/design sources, requirements and agent working records
+docs/
+design/
+tasks/
+.stitch-reference/
+/*.docx
+/*.pdf
+AGENTS.md
+
+# Packaged binaries are reproducible from source
+dist/*.apk
+dist/*.aab
+!dist/.gitkeep
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# macOS metadata
+.DS_Store
+._*
