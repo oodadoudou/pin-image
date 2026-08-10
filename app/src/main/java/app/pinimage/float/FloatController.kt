@@ -17,7 +17,15 @@ object FloatController {
 
     fun startControlPanel(context: Context) {
         appContext = context.applicationContext
-        FloatService.start(context)
+        try {
+            val intent = Intent(context, FloatService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     fun pin(uri: String) {

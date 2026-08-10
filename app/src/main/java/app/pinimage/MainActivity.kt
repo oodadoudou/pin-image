@@ -189,6 +189,7 @@ private fun MainScaffold(
             Tab.Home -> HomeScreen(
                 padding = padding,
                 settings = settings,
+                recent = recent,
                 hasOverlayPermission = overlayGranted,
                 hasAccessibility = a11yGranted,
                 onRequestOverlay = {
@@ -213,6 +214,7 @@ private fun MainScaffold(
                     )
                 },
                 onStartFloatService = { FloatController.startControlPanel(context) },
+                onPinRecent = { uri -> FloatController.pin(uri) },
             )
 
             Tab.Board -> BoardListScreen(

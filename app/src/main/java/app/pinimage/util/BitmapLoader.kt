@@ -35,10 +35,9 @@ object BitmapLoader {
 
     private fun decode(context: Context, uri: String): Bitmap? {
         return try {
-            if (uri.startsWith("content://") || uri.startsWith("file://")) {
+            if (uri.startsWith("content://")) {
                 val resolver = context.contentResolver
-                val descriptor = resolver.openAssetFileDescriptor(Uri.parse(uri), "r")
-                descriptor?.use {
+                resolver.openAssetFileDescriptor(Uri.parse(uri), "r")?.use {
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, bounds)
                     val sample = calculateSample(bounds.outWidth, bounds.outHeight)
@@ -46,7 +45,7 @@ object BitmapLoader {
                     BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, opts)
                 }
             } else {
-                val file = File(uri)
+                val file = File(uri.removePrefix("file://"))
                 if (!file.exists()) return null
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(file.absolutePath, bounds)

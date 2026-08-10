@@ -48,6 +48,12 @@ class FloatingItemView(
     var editMode: EditMode = EditMode.View
         private set
 
+    private var onTapOutside: (() -> Unit)? = null
+
+    fun setOnTapOutsideListener(listener: (() -> Unit)?) {
+        onTapOutside = listener
+    }
+
     private val contentMatrix = Matrix()
 
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
@@ -136,6 +142,18 @@ class FloatingItemView(
     fun setEditMode(mode: EditMode) {
         this.editMode = mode
         if (mode == EditMode.View) callbacks.onExitEditMode()
+        val lp = layoutParams as? android.view.WindowManager.LayoutParams
+        if (lp != null) {
+            if (mode == EditMode.FrameEdit) {
+                lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+            } else {
+                lp.flags = lp.flags and android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH.inv()
+            }
+            runCatching {
+                val wm = context.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+                wm.updateViewLayout(this, lp)
+            }
+        }
         invalidate()
     }
 
@@ -248,6 +266,12 @@ class FloatingItemView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+            if (editMode == EditMode.FrameEdit) {
+                setEditMode(EditMode.View)
+            }
+            return false
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> handleDown(event)
             MotionEvent.ACTION_POINTER_DOWN -> handlePointerDown(event)
