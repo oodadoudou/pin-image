@@ -42,6 +42,12 @@
             android:exported="false"
             android:label="Edit Image"
             android:theme="@style/Theme.PinImage" />
+
+        <activity
+            android:name=".board.BoardActivity"
+            android:exported="false"
+            android:label="Board"
+            android:theme="@style/Theme.PinImage" />
     </application>
 
 </manifest>

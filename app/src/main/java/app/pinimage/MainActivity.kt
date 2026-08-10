@@ -218,8 +218,19 @@ private fun MainScaffold(
             Tab.Board -> BoardListScreen(
                 padding = padding,
                 boards = boards,
-                onCreate = { /* board editor added in later commit */ },
-                onOpen = { /* board editor added in later commit */ },
+                onCreate = {
+                    context.startActivity(
+                        Intent(context, app.pinimage.board.BoardActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                onOpen = { b ->
+                    context.startActivity(
+                        Intent(context, app.pinimage.board.BoardActivity::class.java)
+                            .putExtra(app.pinimage.board.BoardActivity.EXTRA_BOARD_ID, b.id)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
                 onDelete = { b -> vm.launch { vm.container.boards.delete(b.id) } },
             )
 
