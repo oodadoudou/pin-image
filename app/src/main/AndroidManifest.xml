@@ -36,6 +36,12 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Reference image floating window host" />
         </service>
+
+        <activity
+            android:name=".edit.EditActivity"
+            android:exported="false"
+            android:label="Edit Image"
+            android:theme="@style/Theme.PinImage" />
     </application>
 
 </manifest>

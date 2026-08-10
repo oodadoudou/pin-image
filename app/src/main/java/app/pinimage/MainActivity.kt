@@ -70,15 +70,23 @@ class MainViewModel(application: android.app.Application) : AndroidViewModel(app
 class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
+    private var pendingReplaceItemId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FloatController.init(applicationContext)
+        if (intent?.action == ACTION_PICK_REPLACE) {
+            pendingReplaceItemId = intent.getStringExtra(EXTRA_TARGET_ITEM_ID)
+        }
         handleShareIntent(intent)
         setContent {
             PinImageTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MainScaffold(vm)
+                    MainScaffold(
+                        vm = vm,
+                        pendingReplaceItemId = pendingReplaceItemId,
+                        onReplaceConsumed = { pendingReplaceItemId = null },
+                    )
                 }
             }
         }
@@ -86,6 +94,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == ACTION_PICK_REPLACE) {
+            pendingReplaceItemId = intent.getStringExtra(EXTRA_TARGET_ITEM_ID)
+        }
         handleShareIntent(intent)
     }
 
@@ -107,6 +118,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+const val ACTION_PICK_REPLACE = "app.pinimage.action.PICK_REPLACE"
+const val EXTRA_TARGET_ITEM_ID = "extra_target_item_id"
+
 private enum class Tab(val label: String, val icon: ImageVector) {
     Home("Home", Icons.Outlined.Home),
     Board("Board", Icons.Outlined.Dashboard),
@@ -114,7 +128,11 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-private fun MainScaffold(vm: MainViewModel) {
+private fun MainScaffold(
+    vm: MainViewModel,
+    pendingReplaceItemId: String?,
+    onReplaceConsumed: () -> Unit,
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val settings by vm.settings.collectAsStateWithLifecycle()
     val boards by vm.boards.collectAsStateWithLifecycle()
@@ -132,7 +150,24 @@ private fun MainScaffold(vm: MainViewModel) {
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (_: SecurityException) {
             }
-            FloatController.pin(uri.toString())
+            if (pendingReplaceItemId != null) {
+                app.pinimage.float.ViewRegistry.get(pendingReplaceItemId)?.replaceImage(uri.toString())
+                onReplaceConsumed()
+            } else {
+                FloatController.pin(uri.toString())
+            }
+        } else {
+            onReplaceConsumed()
+        }
+    }
+
+    LaunchedEffect(pendingReplaceItemId) {
+        if (pendingReplaceItemId != null) {
+            pickToPin.launch(
+                androidx.activity.result.PickVisualMediaRequest(
+                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                ),
+            )
         }
     }
 

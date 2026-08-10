@@ -4,9 +4,8 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * Static entry point for floating window operations. The real implementation
- * is added incrementally in later commits; this stub keeps the main UI
- * compilable and forwards pin requests once FloatService exists.
+ * Thin static facade so non-service code (UI, accessibility service) can ask
+ * the floating layer to do things without holding a service reference.
  */
 object FloatController {
 
@@ -18,23 +17,37 @@ object FloatController {
 
     fun startControlPanel(context: Context) {
         appContext = context.applicationContext
-        try {
-            context.startService(Intent(context, FloatService::class.java))
-        } catch (_: Exception) {
-        }
+        FloatService.start(context)
     }
 
     fun pin(uri: String) {
-        appContext?.let { ctx ->
-            try {
-                ctx.startService(
-                    Intent(ctx, FloatService::class.java).apply {
-                        action = FloatService.ACTION_PIN_URI
-                        putExtra(FloatService.EXTRA_URI, uri)
-                    },
-                )
-            } catch (_: Exception) {
-            }
+        val ctx = appContext ?: return
+        FloatService.pinUri(ctx, uri)
+    }
+
+    fun closeAll() {
+        appContext?.let { FloatService.send(it, FloatService.ACTION_CLOSE_ALL) }
+    }
+
+    fun hideAll() {
+        appContext?.let { FloatService.send(it, FloatService.ACTION_HIDE_ALL) }
+    }
+
+    fun showAll() {
+        appContext?.let { FloatService.send(it, FloatService.ACTION_SHOW_ALL) }
+    }
+
+    fun replaceItemImage(itemId: String, newUri: String) {
+        appContext?.let {
+            it.sendBroadcast(
+                Intent(ACTION_REPLACE).setPackage(it.packageName)
+                    .putExtra(EXTRA_ITEM_ID, itemId)
+                    .putExtra(EXTRA_URI, newUri),
+            )
         }
     }
+
+    const val ACTION_REPLACE = "app.pinimage.action.REPLACE"
+    const val EXTRA_ITEM_ID = "extra_item_id"
+    const val EXTRA_URI = "extra_uri"
 }
