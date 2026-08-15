@@ -11,6 +11,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PinImage">
@@ -25,6 +26,8 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
             </intent-filter>
         </activity>
 
@@ -53,13 +56,13 @@
         <activity
             android:name=".edit.EditActivity"
             android:exported="false"
-            android:label="Edit Image"
+            android:label="@string/edit_image"
             android:theme="@style/Theme.PinImage" />
 
         <activity
             android:name=".board.BoardActivity"
             android:exported="false"
-            android:label="Board"
+            android:label="@string/boards_title"
             android:theme="@style/Theme.PinImage" />
     </application>
 

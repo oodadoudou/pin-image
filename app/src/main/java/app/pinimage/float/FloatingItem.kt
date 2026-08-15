@@ -11,10 +11,18 @@ data class FloatingItem(
     val id: String,
     val imageUri: String,
     val frame: FrameTransform,
+    val mediaKind: MediaKind = MediaKind.Image,
     val content: ContentTransform = ContentTransform(),
     val display: DisplayProps = DisplayProps(),
     val state: LockState = LockState.Unlocked,
 )
+
+@Serializable
+enum class MediaKind {
+    Image,
+    Pdf,
+    Epub,
+}
 
 @Serializable
 data class FrameTransform(
@@ -36,7 +44,16 @@ data class ContentTransform(
 data class DisplayProps(
     val opacity: Float = 1f,
     val zIndex: Int = 0,
+    val borderStyle: PinBorderStyle = PinBorderStyle.Hairline,
 )
+
+@Serializable
+enum class PinBorderStyle {
+    None,
+    Hairline,
+    Outline,
+    SoftShadow,
+}
 
 @Serializable
 enum class LockState {

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">Pin Image</title>
+  <desc id="desc">An offline floating reference workspace for Android, represented by layered image, PDF, and EPUB windows.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F7FA"/><stop offset="1" stop-color="#ECEEF5"/>
+    </linearGradient>
+    <linearGradient id="photo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B8F2D0"/><stop offset="0.52" stop-color="#6CD5C3"/><stop offset="1" stop-color="#5E8BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="320" rx="32" fill="url(#canvas)"/>
+  <rect x="1" y="1" width="1198" height="318" rx="31" fill="none" stroke="#D8DAE3"/>
+
+  <g transform="translate(64 55)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="0" y="0" dominant-baseline="hanging" fill="#6E6E73" font-size="18" font-weight="650" letter-spacing="2.4">FLOATING REFERENCE WORKSPACE · ANDROID</text>
+    <text x="0" y="66" dominant-baseline="hanging" fill="#1D1D1F" font-size="68" font-weight="760" letter-spacing="-2.8">Pin Image</text>
+    <text x="0" y="154" dominant-baseline="hanging" fill="#3A3A3C" font-size="25" font-weight="450">Keep every reference within reach.</text>
+    <g transform="translate(0 213)" font-size="18" font-weight="600">
+      <rect width="112" height="36" rx="18" fill="#FFFFFF" stroke="#D8DAE3"/>
+      <circle cx="22" cy="18" r="5" fill="#30D158"/>
+      <text x="36" y="24" fill="#3A3A3C">LOCAL</text>
+      <rect x="124" width="142" height="36" rx="18" fill="#FFFFFF" stroke="#D8DAE3"/>
+      <text x="145" y="24" fill="#3A3A3C">ANDROID 11+</text>
+    </g>
+  </g>
+
+  <g transform="translate(748 35)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g transform="translate(110 8) rotate(5 126 116)">
+      <rect x="5" y="8" width="252" height="224" rx="24" fill="#C8CBD6" opacity=".55"/>
+      <rect width="252" height="224" rx="24" fill="#FFFFFF" stroke="#D0D2DA"/>
+      <rect x="18" y="18" width="216" height="30" rx="11" fill="#F2F2F7"/>
+      <circle cx="36" cy="33" r="5" fill="#FF453A"/>
+      <text x="190" y="38" fill="#6E6E73" font-size="16" font-weight="700">EPUB</text>
+      <rect x="28" y="70" width="118" height="9" rx="4.5" fill="#1D1D1F"/>
+      <rect x="28" y="91" width="190" height="6" rx="3" fill="#B2B2B7"/>
+      <rect x="28" y="108" width="178" height="6" rx="3" fill="#C7C7CC"/>
+      <rect x="28" y="125" width="186" height="6" rx="3" fill="#C7C7CC"/>
+      <rect x="28" y="142" width="152" height="6" rx="3" fill="#C7C7CC"/>
+      <rect x="28" y="177" width="196" height="3" rx="1.5" fill="#E5E5EA"/>
+      <circle cx="150" cy="178.5" r="6" fill="#007AFF"/>
+    </g>
+    <g transform="translate(14 61) rotate(-6 115 102)">
+      <rect x="5" y="8" width="230" height="204" rx="24" fill="#C8CBD6" opacity=".5"/>
+      <rect width="230" height="204" rx="24" fill="#FFFFFF" stroke="#D0D2DA"/>
+      <rect x="16" y="16" width="198" height="29" rx="11" fill="#F2F2F7"/>
+      <circle cx="34" cy="30.5" r="5" fill="#FF9F0A"/>
+      <text x="174" y="36" fill="#6E6E73" font-size="16" font-weight="700">PDF</text>
+      <rect x="29" y="65" width="172" height="114" rx="9" fill="#F2F2F7"/>
+      <rect x="47" y="82" width="84" height="8" rx="4" fill="#1D1D1F"/>
+      <rect x="47" y="102" width="134" height="5" rx="2.5" fill="#B2B2B7"/>
+      <rect x="47" y="117" width="126" height="5" rx="2.5" fill="#C7C7CC"/>
+      <rect x="47" y="132" width="139" height="5" rx="2.5" fill="#C7C7CC"/>
+      <rect x="158" y="151" width="30" height="16" rx="8" fill="#1D1D1F" opacity=".82"/>
+      <text x="166" y="163" fill="#FFFFFF" font-size="10" font-weight="700">4/12</text>
+    </g>
+    <g transform="translate(116 91)">
+      <rect x="6" y="9" width="232" height="190" rx="25" fill="#596273" opacity=".22"/>
+      <rect width="232" height="190" rx="25" fill="#FFFFFF" stroke="#C8CAD4"/>
+      <rect x="15" y="15" width="202" height="31" rx="12" fill="#F2F2F7"/>
+      <circle cx="33" cy="30.5" r="5" fill="#30D158"/>
+      <text x="174" y="36" fill="#6E6E73" font-size="16" font-weight="700">IMG</text>
+      <rect x="15" y="57" width="202" height="118" rx="14" fill="url(#photo)"/>
+      <circle cx="174" cy="88" r="19" fill="#FFF4C2" opacity=".9"/>
+      <path d="M15 148 L62 108 L94 134 L128 92 L175 132 L217 103 L217 175 L15 175 Z" fill="#267D63" opacity=".72"/>
+      <rect x="191" y="151" width="16" height="16" rx="5" fill="#FFFFFF"/>
+    </g>
+  </g>
+</svg>

@@ -1,70 +1,49 @@
-# Pin Image
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Pin Image — an offline floating reference workspace for Android">
+</p>
 
-A lightweight Android tool for quick screenshots, floating reference images, and simple multi-image boards.
+<p align="center">
+  <strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a>
+</p>
 
-Pin Image is a personal, offline-only utility. It is designed for reference workflows while drawing, reading, or browsing: capture something on screen, pin it as a floating image above other apps, and pan/zoom the content inside a fixed frame.
+Pin Image keeps images, boards, PDFs, and EPUB books above your other Android apps. Capture or import a reference, pin it in a resizable floating frame, then pan, zoom, rotate, style, or resume reading without leaving your current workspace.
 
-## Core ideas
+## Highlights
 
-- **One tap to screenshot and pin.** An Accessibility-service floating button captures the screen and immediately shows it as a pinned floating image.
-- **Frame and content are separate.** The floating window (position, size, opacity, lock state) is independent from the image inside it (zoom, pan, rotation). Resizing the window never zooms the image, and zooming the image never resizes the window.
-- **Multiple pins.** Keep several reference images on screen at once, each with its own position, size, zoom, opacity, and lock state.
-- **Minimal editor.** Crop, rotate 90°, flip horizontal/vertical, reset. No filters, brushes, AI, cloud, or accounts.
-- **Simple board.** Drop multiple images onto a canvas, move/resize/flip each one, fit the canvas to content, and export PNG/JPEG — or pin the result as a new floating image.
-- **Local only.** No internet permission, no analytics, no upload.
+- **Independent frame and content controls** — resize the floating window without changing the image scale, or pan and zoom the content without moving its frame.
+- **Images, PDFs, and EPUBs** — scroll documents, jump between PDF pages, adjust EPUB text size, and restore the last reading position.
+- **Multi-image boards** — arrange, transform, layer, duplicate, and export several references on one canvas.
+- **Local photo editing** — crop, rotate, flip, undo, apply seven filter presets, or manually tune 13 image parameters.
+- **A practical local library** — previews, names, rename, single or batch removal, and double-tap protection against accidental pins.
+- **Private by design** — no `INTERNET` permission, accounts, analytics, ads, or cloud upload.
 
-## Tech stack
+## Download
 
-- Kotlin
-- Jetpack Compose for in-app UI
-- Traditional `View` + `WindowManager` for system floating windows
-- `AccessibilityService.takeScreenshot` (API 30+) for one-tap screenshots
-- AndroidX MediaStore for saving images
-- Single-module Gradle project, no DI framework
+Android 11 or newer is required. Download the newest APK from [GitHub Releases](https://github.com/oodadoudou/pin-image/releases/latest).
 
-## Requirements
+Because the APK is distributed outside Google Play, Android may ask you to allow installation from your browser or file manager.
 
-- Android 11 (API 30) or newer
-- JDK 17 to build
+## Permissions
 
-## Build
+- **Display over other apps** shows floating references.
+- **Accessibility Service** enables the optional one-tap screenshot button. Pin Image only invokes Android's screenshot API and does not inspect screen content.
+- **Notifications** provide persistent hide, show, and close controls.
+- **Photo Picker** imports images without broad storage access.
+
+## Build from source
+
+Requirements: Android SDK 35 and JDK 17.
 
 ```sh
 ./gradlew :app:assembleDebug
 ```
 
-The resulting debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-Install on a connected device:
+## Format notes
 
-```sh
-./gradlew :app:installDebug
-```
-
-## Project layout
-
-```
-app/src/main/java/app/pinimage/
-    MainActivity.kt          # entry point
-    ui/theme/                # Compose theming
-    float/                   # floating window service, frame + content model
-    screenshot/              # accessibility screenshot capture
-    board/                   # multi-image board canvas
-    edit/                    # crop / rotate / flip editor
-    data/                    # persistent settings and recent pins
-```
-
-The exact package structure will grow as features land; each feature is added in its own commit.
-
-## Permissions
-
-The app asks only for what it needs:
-
-- Accessibility Service — to take screenshots without a system dialog
-- Display over other apps (`SYSTEM_ALERT_WINDOW`) — to show floating images
-- Notifications — for the persistent control notification
-- Photo Picker — to import images without broad storage access
+PDF reading uses Android's local PDF renderer. EPUB support targets non-DRM EPUB 2/3 reflowable books; scripted, DRM-protected, and complex fixed-layout publications may not render completely.
 
 ## License
 
-Personal project. All rights reserved unless otherwise stated.
+Copyright © 2026. All rights reserved.

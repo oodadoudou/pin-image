@@ -7,5 +7,6 @@ class AppContainer(context: Context) {
     val settings = AppSettings(applicationContext)
     val floatingItems = FloatingItemRepository(applicationContext)
     val recent = RecentRepository(applicationContext)
+    val libraryMetadata = LibraryMetadataStore(applicationContext)
     val boards = BoardRepository(applicationContext)
 }

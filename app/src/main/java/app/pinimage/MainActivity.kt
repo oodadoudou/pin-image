@@ -26,13 +26,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.IntentCompat
 import app.pinimage.a11y.ScreenshotAccessibilityService
 import app.pinimage.data.AppContainer
 import app.pinimage.data.AppSettings
@@ -70,7 +74,7 @@ class MainViewModel(application: android.app.Application) : AndroidViewModel(app
 class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
-    private var pendingReplaceItemId: String? = null
+    private var pendingReplaceItemId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,9 +106,8 @@ class MainActivity : ComponentActivity() {
 
     private fun handleShareIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_SEND) {
-            val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-            if (uri != null) {
-                grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            if (uri?.scheme == "content") {
                 try {
                     contentResolver.takePersistableUriPermission(
                         uri,
@@ -121,10 +124,10 @@ class MainActivity : ComponentActivity() {
 const val ACTION_PICK_REPLACE = "app.pinimage.action.PICK_REPLACE"
 const val EXTRA_TARGET_ITEM_ID = "extra_target_item_id"
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    Home("Home", Icons.Outlined.Home),
-    Board("Board", Icons.Outlined.Dashboard),
-    Settings("Settings", Icons.Outlined.Settings),
+private enum class Tab(@StringRes val labelRes: Int, val icon: ImageVector) {
+    Home(R.string.tab_home, Icons.Outlined.Home),
+    Board(R.string.tab_board, Icons.Outlined.Dashboard),
+    Settings(R.string.tab_settings, Icons.Outlined.Settings),
 }
 
 @Composable
@@ -160,6 +163,28 @@ private fun MainScaffold(
             onReplaceConsumed()
         }
     }
+    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+            }
+            FloatController.pin(uri.toString())
+        }
+    }
+    val pickEpub = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+            }
+            FloatController.pin(uri.toString())
+        }
+    }
+    var notificationGranted by remember { mutableStateOf(PermissionChecks.canPostNotifications(context)) }
+    val requestNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationGranted = granted
+    }
 
     LaunchedEffect(pendingReplaceItemId) {
         if (pendingReplaceItemId != null) {
@@ -172,14 +197,19 @@ private fun MainScaffold(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                tonalElevation = androidx.compose.ui.unit.Dp(0f),
+            ) {
                 tabs.forEachIndexed { index, item ->
+                    val label = stringResource(item.labelRes)
                     NavigationBarItem(
                         selected = tab == index,
                         onClick = { tab = index },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
+                        icon = { Icon(item.icon, contentDescription = label) },
+                        label = { Text(label) },
                     )
                 }
             }
@@ -188,10 +218,10 @@ private fun MainScaffold(
         when (tabs[tab]) {
             Tab.Home -> HomeScreen(
                 padding = padding,
-                settings = settings,
                 recent = recent,
                 hasOverlayPermission = overlayGranted,
                 hasAccessibility = a11yGranted,
+                hasNotificationPermission = notificationGranted,
                 onRequestOverlay = {
                     context.startActivity(
                         Intent(
@@ -206,6 +236,11 @@ private fun MainScaffold(
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 },
+                onRequestNotifications = {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        requestNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
                 onPickAndPin = {
                     pickToPin.launch(
                         androidx.activity.result.PickVisualMediaRequest(
@@ -213,8 +248,13 @@ private fun MainScaffold(
                         ),
                     )
                 },
+                onPickPdf = { pickPdf.launch(arrayOf("application/pdf")) },
+                onPickEpub = { pickEpub.launch(arrayOf("application/epub+zip")) },
                 onStartFloatService = { FloatController.startControlPanel(context) },
                 onPinRecent = { uri -> FloatController.pin(uri) },
+                onDeleteRecents = { uris ->
+                    vm.container.recent.replaceAll(recent.filterNot { it in uris })
+                },
             )
 
             Tab.Board -> BoardListScreen(

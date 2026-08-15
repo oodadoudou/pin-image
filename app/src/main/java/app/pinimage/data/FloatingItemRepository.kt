@@ -18,6 +18,7 @@ class FloatingItemRepository(context: Context) {
     }
 
     private val _items = MutableStateFlow(load())
+    private val writer = AtomicJsonWriter(file)
     val items: StateFlow<List<FloatingItem>> = _items.asStateFlow()
 
     fun update(transform: (List<FloatingItem>) -> List<FloatingItem>) {
@@ -32,15 +33,12 @@ class FloatingItemRepository(context: Context) {
     }
 
     private fun load(): List<FloatingItem> = try {
-        if (file.exists()) JsonCodec.decodeFloatingItems(file.readText()) else emptyList()
+        JsonCodec.decodeFloatingItems(readAtomicText(file))
     } catch (_: Exception) {
         emptyList()
     }
 
     private fun save(value: List<FloatingItem>) {
-        try {
-            file.writeText(JsonCodec.encodeFloatingItems(value))
-        } catch (_: Exception) {
-        }
+        writer.write(JsonCodec.encodeFloatingItems(value))
     }
 }

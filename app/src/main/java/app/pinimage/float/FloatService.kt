@@ -11,7 +11,6 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
-import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
@@ -22,6 +21,7 @@ import app.pinimage.util.BitmapLoader
 import app.pinimage.util.saveBitmapToGallery
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
@@ -37,18 +37,22 @@ class FloatService : Service() {
     private val views = mutableMapOf<String, FloatingItemView>()
     private var nextZ = 0
     private var editModeViewId: String? = null
+    private var allVisible = true
+    private var restoreJob: Job? = null
 
     private lateinit var container: app.pinimage.data.AppContainer
+    private lateinit var pdfReadingProgress: app.pinimage.data.PdfReadingProgressStore
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         container = (application as PinImageApp).container
+        pdfReadingProgress = app.pinimage.data.PdfReadingProgressStore(this)
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         FloatingDp.init(this)
-        startForeground(NOTIF_ID, buildNotification("Reference Pin"))
-        restoreFromRepository()
+        startForeground(NOTIF_ID, buildNotification())
+        restoreJob = restoreFromRepository()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -67,52 +71,106 @@ class FloatService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        views.forEach { (id, view) ->
+            runCatching { wm.removeView(view) }
+            ViewRegistry.unregister(id)
+        }
+        views.clear()
         scope.cancel()
+        super.onDestroy()
     }
 
-    private fun restoreFromRepository() {
-        scope.launch {
-            val items = container.floatingItems.items.first()
-            items.forEach { item -> addWindowFor(item) }
-        }
+    private fun restoreFromRepository(): Job = scope.launch {
+            val settings = container.settings.snapshot.first()
+            val items = container.floatingItems.items.first().sortedBy { it.display.zIndex }.map { item ->
+                val stableUri = app.pinimage.util.PersistentImageStore.ensurePersistent(this@FloatService, item.imageUri)
+                val detectedKind = if (app.pinimage.util.PersistentImageStore.isPdf(this@FloatService, android.net.Uri.parse(stableUri))) {
+                    MediaKind.Pdf
+                } else if (app.pinimage.util.PersistentImageStore.isEpub(this@FloatService, android.net.Uri.parse(stableUri))) {
+                    MediaKind.Epub
+                } else {
+                    item.mediaKind
+                }
+                item.copy(imageUri = stableUri, mediaKind = detectedKind)
+            }
+            container.floatingItems.replaceAll(items)
+            items.forEachIndexed { index, item ->
+                val restored = if (settings.rememberPosition) item else item.copy(
+                    frame = item.frame.copy(x = 40 + index * 24, y = 200 + index * 24),
+                )
+                addWindowFor(restored, restoreContentTransform = true)
+            }
     }
 
     private fun pinUri(uri: String) {
         scope.launch {
-            val (w, h) = computeDefaultFrameSize(uri)
+            restoreJob?.join()
+            val sourceUri = android.net.Uri.parse(uri)
+            // Reopening a private library copy must not replace its saved original name with the
+            // generated storage filename (for example pdf_<hash>.pdf).
+            val originalName = container.libraryMetadata.storedDisplayName(uri)
+                ?: container.libraryMetadata.resolveOriginalName(sourceUri)
+            val mediaKind = if (app.pinimage.util.PersistentImageStore.isPdf(this@FloatService, sourceUri)) {
+                MediaKind.Pdf
+            } else if (app.pinimage.util.PersistentImageStore.isEpub(this@FloatService, sourceUri)) {
+                MediaKind.Epub
+            } else {
+                MediaKind.Image
+            }
+            val stableUri = app.pinimage.util.PersistentImageStore.ensurePersistent(this@FloatService, uri)
+            container.libraryMetadata.put(stableUri, originalName, mediaKind)
+            val (w, h) = computeDefaultFrameSize(stableUri, mediaKind)
             val item = FloatingItem(
                 id = UUID.randomUUID().toString(),
-                imageUri = uri,
+                imageUri = stableUri,
                 frame = FrameTransform(
                     x = 40 + views.size * 24,
                     y = 200 + views.size * 24,
                     width = w,
                     height = h,
                 ),
+                mediaKind = mediaKind,
+                content = if (mediaKind == MediaKind.Pdf || mediaKind == MediaKind.Epub) {
+                    pdfReadingProgress.get(stableUri) ?: ContentTransform()
+                } else {
+                    ContentTransform()
+                },
                 display = DisplayProps(opacity = container.settings.snapshot.first().defaultOpacity),
             )
-            addWindowFor(item)
+            addWindowFor(
+                item,
+                restoreContentTransform = mediaKind != MediaKind.Image && pdfReadingProgress.get(stableUri) != null,
+            )
             container.floatingItems.update { it + item }
-            container.recent.push(uri)
+            container.recent.push(stableUri)
         }
     }
 
-    private suspend fun computeDefaultFrameSize(uri: String): Pair<Int, Int> {
-        val metrics = DisplayMetrics().also { wm.defaultDisplay.getRealMetrics(it) }
+    private suspend fun computeDefaultFrameSize(uri: String, mediaKind: MediaKind): Pair<Int, Int> {
+        val bounds = wm.maximumWindowMetrics.bounds
         val settings = container.settings.snapshot.first()
         if (settings.rememberSize && settings.lastFrameWidth > 0 && settings.lastFrameHeight > 0) {
             return settings.lastFrameWidth to settings.lastFrameHeight
         }
-        val bmp = withContext(Dispatchers.IO) { BitmapLoader.load(this@FloatService, uri) }
-        val targetWidth = (metrics.widthPixels * 0.30f).toInt()
-        val ratio = if (bmp != null && bmp.height > 0) bmp.width.toFloat() / bmp.height else 1f
-        val targetHeight = (targetWidth / ratio).toInt().coerceIn(200, metrics.heightPixels / 2)
+        val targetWidth = (bounds.width() * 0.30f).toInt()
+        val ratio = if (mediaKind == MediaKind.Pdf) {
+            withContext(Dispatchers.IO) {
+                PdfPageSource.open(this@FloatService, uri)?.use { source ->
+                    source.pages.firstOrNull()?.let { it.width.toFloat() / it.height }
+                }
+            } ?: 0.75f
+        } else if (mediaKind == MediaKind.Epub) {
+            0.72f
+        } else {
+            val bmp = withContext(Dispatchers.IO) { BitmapLoader.load(this@FloatService, uri) }
+            if (bmp != null && bmp.height > 0) bmp.width.toFloat() / bmp.height else 1f
+        }
+        val targetHeight = (targetWidth / ratio).toInt().coerceIn(200, bounds.height() / 2)
         return targetWidth to targetHeight
     }
 
-    private fun addWindowFor(item: FloatingItem) {
-        val view = FloatingItemView(this, item, scope, callbacks)
+    private fun addWindowFor(item: FloatingItem, restoreContentTransform: Boolean) {
+        val view = FloatingItemView(this, item, scope, callbacks, restoreContentTransform)
         val params = WindowManager.LayoutParams(
             item.frame.width,
             item.frame.height,
@@ -126,11 +184,16 @@ class FloatService : Service() {
             y = item.frame.y
         }
         wm.addView(view, params)
+        view.visibility = if (allVisible) android.view.View.VISIBLE else android.view.View.GONE
         views[item.id] = view
         ViewRegistry.register(item.id, view)
     }
 
     private fun updateItem(view: FloatingItemView, newItem: FloatingItem) {
+        view.applyExternalUpdate(newItem)
+        if (newItem.mediaKind == MediaKind.Pdf || newItem.mediaKind == MediaKind.Epub) {
+            pdfReadingProgress.put(newItem.imageUri, newItem.content)
+        }
         container.floatingItems.update { list ->
             list.map { if (it.id == newItem.id) newItem else it }
         }
@@ -150,6 +213,7 @@ class FloatService : Service() {
     }
 
     private fun setAllVisible(visible: Boolean) {
+        allVisible = visible
         views.values.forEach { it.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE }
     }
 
@@ -157,7 +221,7 @@ class FloatService : Service() {
         val id = view.originalItem.id
         try { wm.removeView(view); wm.addView(view, view.layoutParams) } catch (_: Exception) {}
         views.remove(id); views[id] = view
-        updateOrder()
+        persistOrder()
     }
 
     private fun sendToBack(view: FloatingItemView) {
@@ -170,36 +234,37 @@ class FloatService : Service() {
         others.forEach { (_, v) ->
             try { wm.removeView(v); wm.addView(v, v.layoutParams) } catch (_: Exception) {}
         }
+        persistOrder()
     }
 
-    private fun updateOrder() {
-        val items = container.floatingItems.items.value
-        views.keys.forEach { id ->
-            val v = views[id] ?: return@forEach
-            val item = items.firstOrNull { it.id == id } ?: return@forEach
-            // z handled by re-add order; no extra layout change needed.
-            v.tag = item
+    private fun persistOrder() {
+        val orderedIds = views.keys.toList()
+        container.floatingItems.update { items ->
+            val byId = items.associateBy { it.id }
+            orderedIds.mapIndexedNotNull { index, id ->
+                byId[id]?.copy(display = byId[id]!!.display.copy(zIndex = index))
+            }
         }
     }
 
     private fun duplicate(view: FloatingItemView) {
-        val src = view.originalItem
+        val src = view.currentItem
         scope.launch {
             val copy = src.copy(
                 id = UUID.randomUUID().toString(),
                 frame = src.frame.copy(x = src.frame.x + 24, y = src.frame.y + 24),
             )
-            addWindowFor(copy)
+            addWindowFor(copy, restoreContentTransform = true)
             container.floatingItems.update { it + copy }
             container.recent.push(copy.imageUri)
         }
     }
 
-    private fun buildNotification(text: String): Notification {
+    private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Reference Pin", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_ID, getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW),
             )
         }
         val openIntent = PendingIntent.getActivity(
@@ -217,13 +282,13 @@ class FloatService : Service() {
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("Reference Pin")
-            .setContentText(text)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_running))
             .setOngoing(true)
             .setContentIntent(openIntent)
-            .addAction(action(ACTION_HIDE_ALL, "Hide"))
-            .addAction(action(ACTION_SHOW_ALL, "Show"))
-            .addAction(action(ACTION_CLOSE_ALL, "Close All"))
+            .addAction(action(ACTION_HIDE_ALL, getString(R.string.hide)))
+            .addAction(action(ACTION_SHOW_ALL, getString(R.string.show)))
+            .addAction(action(ACTION_CLOSE_ALL, getString(R.string.close_all)))
             .build()
     }
 
@@ -235,6 +300,10 @@ class FloatService : Service() {
         override fun onClose(view: FloatingItemView) = removeItem(view.originalItem.id)
 
         override fun onEdit(view: FloatingItemView) {
+            if (view.originalItem.mediaKind != MediaKind.Image) {
+                android.widget.Toast.makeText(this@FloatService, R.string.pdf_edit_not_available, android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
             // Launch the basic editor activity when it exists.
             val intent = Intent(this@FloatService, app.pinimage.edit.EditActivity::class.java).apply {
                 putExtra(app.pinimage.edit.EditActivity.EXTRA_URI, view.originalItem.imageUri)
@@ -254,6 +323,9 @@ class FloatService : Service() {
         }
 
         override fun onDuplicate(view: FloatingItemView) = duplicate(view)
+        override fun onHide(view: FloatingItemView) {
+            view.visibility = android.view.View.GONE
+        }
         override fun onSave(view: FloatingItemView) {
             scope.launch {
                 val bmp = withContext(Dispatchers.IO) { BitmapLoader.load(this@FloatService, view.originalItem.imageUri) }
@@ -270,6 +342,16 @@ class FloatService : Service() {
             view.setEditMode(FloatingItemView.EditMode.FrameEdit)
         }
 
+        override fun onToolbarShown(view: FloatingItemView) {
+            views.values.filter { it !== view }.forEach { other ->
+                if (other.editMode == FloatingItemView.EditMode.FrameEdit) {
+                    other.setEditMode(FloatingItemView.EditMode.View)
+                } else {
+                    other.hideToolbar()
+                }
+            }
+        }
+
         override fun onExitEditMode() {
             val id = editModeViewId ?: return
             editModeViewId = null
@@ -279,13 +361,13 @@ class FloatService : Service() {
             scope.launch {
                 container.settings.setLastFrameSize(lp.width, lp.height)
                 if (container.settings.snapshot.first().snapToEdge) {
-                    val metrics = DisplayMetrics().also { wm.defaultDisplay.getRealMetrics(it) }
+                    val bounds = wm.maximumWindowMetrics.bounds
                     val snapThreshold = (24 * resources.displayMetrics.density).toInt()
                     var nx = lp.x; var ny = lp.y
                     if (abs(lp.x) < snapThreshold) nx = 0
-                    if (abs(lp.x + lp.width - metrics.widthPixels) < snapThreshold) nx = metrics.widthPixels - lp.width
+                    if (abs(lp.x + lp.width - bounds.width()) < snapThreshold) nx = bounds.width() - lp.width
                     if (abs(lp.y) < snapThreshold) ny = 0
-                    if (abs(lp.y + lp.height - metrics.heightPixels) < snapThreshold) ny = metrics.heightPixels - lp.height
+                    if (abs(lp.y + lp.height - bounds.height()) < snapThreshold) ny = bounds.height() - lp.height
                     if (nx != lp.x || ny != lp.y) {
                         lp.x = nx; lp.y = ny
                         try { wm.updateViewLayout(v, lp) } catch (_: Exception) {}

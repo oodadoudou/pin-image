@@ -14,6 +14,7 @@ class RecentRepository(context: Context) {
     }
 
     private val _items = MutableStateFlow(load())
+    private val writer = AtomicJsonWriter(file)
     val items: StateFlow<List<String>> = _items.asStateFlow()
 
     fun push(uri: String) {
@@ -27,17 +28,24 @@ class RecentRepository(context: Context) {
         save(emptyList())
     }
 
+    fun remove(uri: String) {
+        replaceAll(_items.value.filterNot { it == uri })
+    }
+
+    fun replaceAll(items: List<String>) {
+        val next = items.distinct().take(MAX)
+        _items.value = next
+        save(next)
+    }
+
     private fun load(): List<String> = try {
-        if (file.exists()) JsonCodec.decodeRecent(file.readText()) else emptyList()
+        JsonCodec.decodeRecent(readAtomicText(file))
     } catch (_: Exception) {
         emptyList()
     }
 
     private fun save(value: List<String>) {
-        try {
-            file.writeText(JsonCodec.encodeRecent(value))
-        } catch (_: Exception) {
-        }
+        writer.write(JsonCodec.encodeRecent(value))
     }
 
     companion object {

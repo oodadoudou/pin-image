@@ -5,6 +5,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val pinImageKeystore = providers.environmentVariable("PIN_IMAGE_KEYSTORE").orNull
+val pinImageStorePassword = providers.environmentVariable("PIN_IMAGE_STORE_PASSWORD").orNull
+val pinImageKeyAlias = providers.environmentVariable("PIN_IMAGE_KEY_ALIAS").orNull
+val pinImageKeyPassword = providers.environmentVariable("PIN_IMAGE_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    pinImageKeystore,
+    pinImageStorePassword,
+    pinImageKeyAlias,
+    pinImageKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "app.pinimage"
     compileSdk = 35
@@ -13,8 +24,8 @@ android {
         applicationId = "app.pinimage"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 10000
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -31,6 +42,23 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(pinImageKeystore!!)
+                storePassword = pinImageStorePassword
+                keyAlias = pinImageKeyAlias
+                keyPassword = pinImageKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
     }
 
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"

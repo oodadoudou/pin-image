@@ -4,7 +4,9 @@ import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.view.Gravity
@@ -17,6 +19,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.util.TypedValue
 import app.pinimage.R
 import app.pinimage.data.AppContainer
 import app.pinimage.edit.EditActivity
@@ -111,21 +114,35 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         removeQuickBar()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xEE111111.toInt())
-            setPadding(16, 16, 16, 16)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(0xF21C1C1E.toInt())
+            }
+            elevation = dp(16).toFloat()
         }
         fun label(text: String, onClick: () -> Unit) {
             val btn = Button(this).apply {
                 this.text = text
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                minHeight = 0
+                minimumHeight = 0
+                setPadding(dp(14), dp(7), dp(14), dp(7))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(11).toFloat()
+                    setColor(Color.TRANSPARENT)
+                }
                 setOnClickListener { onClick() }
             }
             row.addView(btn)
         }
-        label("Pin") {
+        label(getString(R.string.pin)) {
             FloatController.pin(uri)
             removeQuickBar()
         }
-        label("Edit") {
+        label(getString(R.string.edit)) {
             startActivity(
                 Intent(this, EditActivity::class.java)
                     .putExtra(EditActivity.EXTRA_URI, uri)
@@ -133,7 +150,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
             )
             removeQuickBar()
         }
-        label("Save") {
+        label(getString(R.string.save)) {
             scope.launch {
                 val bmp = withContext(Dispatchers.IO) {
                     android.graphics.BitmapFactory.decodeFile(uri.removePrefix("file://"))
@@ -142,7 +159,7 @@ class ScreenshotAccessibilityService : AccessibilityService() {
             }
             removeQuickBar()
         }
-        label("Close") { removeQuickBar() }
+        label(getString(R.string.close)) { removeQuickBar() }
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -177,11 +194,18 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         if (bubble != null) return
         val size = (48 * resources.displayMetrics.density).toInt()
         val bubbleView = FrameLayout(this).apply {
-            setBackgroundColor(0xFF111111.toInt())
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xF21C1C1E.toInt())
+            }
+            elevation = dp(12).toFloat()
             val pad = (14 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad, pad, pad)
             val dot = View(this@ScreenshotAccessibilityService).apply {
-                setBackgroundColor(0xFFFFFFFF.toInt())
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.WHITE)
+                }
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -253,30 +277,42 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         }
         menu = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xEE111111.toInt())
-            setPadding(20, 20, 20, 20)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(0xF7FFFFFF.toInt())
+            }
+            elevation = dp(18).toFloat()
         }
         fun add(text: String, onClick: () -> Unit) {
             val btn = Button(this).apply {
                 this.text = text
+                isAllCaps = false
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                setTextColor(0xFF1C1C1E.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                minHeight = 0
+                minimumHeight = 0
+                setPadding(dp(14), 0, dp(14), 0)
+                background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
                 setOnClickListener { onClick() }
             }
-            menu.addView(btn)
+            menu.addView(btn, LinearLayout.LayoutParams(dp(220), dp(46)))
         }
-        add("Screenshot") { triggerScreenshot(); closeMenu() }
-        add("Open Board") {
+        add(getString(R.string.screenshot)) { triggerScreenshot(); closeMenu() }
+        add(getString(R.string.open_board)) {
             startActivity(
                 Intent(this, app.pinimage.board.BoardActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
             closeMenu()
         }
-        add("Hide All Pins") { FloatController.hideAll(); closeMenu() }
-        add("Open App") {
+        add(getString(R.string.hide_all_pins)) { FloatController.hideAll(); closeMenu() }
+        add(getString(R.string.open_app)) {
             startActivity(packageManager.getLaunchIntentForPackage(packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             closeMenu()
         }
-        add("Close Menu") { closeMenu() }
+        add(getString(R.string.close_menu)) { closeMenu() }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -298,4 +334,6 @@ class ScreenshotAccessibilityService : AccessibilityService() {
         }
         bubble = null
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }

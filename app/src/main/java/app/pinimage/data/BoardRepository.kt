@@ -14,6 +14,7 @@ class BoardRepository(context: Context) {
     }
 
     private val _boards = MutableStateFlow(load())
+    private val writer = AtomicJsonWriter(file)
     val boards: StateFlow<List<Board>> = _boards.asStateFlow()
 
     fun upsert(board: Board) {
@@ -30,18 +31,20 @@ class BoardRepository(context: Context) {
         save(list)
     }
 
+    fun replaceAll(boards: List<Board>) {
+        _boards.value = boards
+        save(boards)
+    }
+
     fun get(id: String): Board? = _boards.value.firstOrNull { it.id == id }
 
     private fun load(): List<Board> = try {
-        if (file.exists()) JsonCodec.decodeBoards(file.readText()) else emptyList()
+        JsonCodec.decodeBoards(readAtomicText(file))
     } catch (_: Exception) {
         emptyList()
     }
 
     private fun save(value: List<Board>) {
-        try {
-            file.writeText(JsonCodec.encodeBoards(value))
-        } catch (_: Exception) {
-        }
+        writer.write(JsonCodec.encodeBoards(value))
     }
 }

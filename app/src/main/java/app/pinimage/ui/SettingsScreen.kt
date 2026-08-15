@@ -1,12 +1,17 @@
 package app.pinimage.ui
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -16,8 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.pinimage.R
 import app.pinimage.data.AppSettings
 import kotlin.math.roundToInt
 
@@ -33,52 +39,82 @@ fun SettingsScreen(
     onSetFloatingButton: (Boolean) -> Unit,
     onSetDefaultOpacity: (Float) -> Unit,
 ) {
+    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
+            .fillMaxHeight()
+            .widthIn(max = 760.dp)
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 20.dp)
+            .padding(top = 14.dp, bottom = 28.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(24.dp))
 
-        SwitchRow("Instant Pin", "Skip the confirmation bar after screenshot", settings.instantPin, onSetInstantPin)
-        SwitchRow("Floating button", "Show the accessibility floating button", settings.floatingButton, onSetFloatingButton)
-        SwitchRow("Remember position", "Restore pinned window positions", settings.rememberPosition, onSetRememberPosition)
-        SwitchRow("Remember size", "Reuse last frame size for new pins", settings.rememberSize, onSetRememberSize)
-        SwitchRow("Snap to edge", "Light snapping when moving a window near an edge", settings.snapToEdge, onSetSnapToEdge)
-        SwitchRow("Auto save screenshots", "Save each screenshot to gallery automatically", settings.autoSaveScreenshot, onSetAutoSaveScreenshot)
+        SectionLabel(stringResource(R.string.settings_capture))
+        InsetCard {
+            SwitchRow(R.string.instant_pin, R.string.instant_pin_detail, settings.instantPin, onSetInstantPin)
+            InsetDivider()
+            SwitchRow(R.string.floating_button, R.string.floating_button_detail, settings.floatingButton, onSetFloatingButton)
+            InsetDivider()
+            SwitchRow(R.string.auto_save, R.string.auto_save_detail, settings.autoSaveScreenshot, onSetAutoSaveScreenshot)
+        }
 
-        Text(
-            "Default opacity: ${(settings.defaultOpacity * 100).roundToInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Slider(
-            value = settings.defaultOpacity,
-            onValueChange = onSetDefaultOpacity,
-            valueRange = 0.2f..1f,
-            steps = 15,
-        )
+        Spacer(Modifier.height(22.dp))
+        SectionLabel(stringResource(R.string.settings_floating))
+        InsetCard {
+            SwitchRow(R.string.remember_position, R.string.remember_position_detail, settings.rememberPosition, onSetRememberPosition)
+            InsetDivider()
+            SwitchRow(R.string.remember_size, R.string.remember_size_detail, settings.rememberSize, onSetRememberSize)
+            InsetDivider()
+            SwitchRow(R.string.snap_to_edge, R.string.snap_to_edge_detail, settings.snapToEdge, onSetSnapToEdge)
+        }
+
+        Spacer(Modifier.height(22.dp))
+        SectionLabel(stringResource(R.string.settings_appearance))
+        InsetCard {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.default_opacity), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.percent_value, (settings.defaultOpacity * 100).roundToInt()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = settings.defaultOpacity,
+                onValueChange = onSetDefaultOpacity,
+                valueRange = 0.2f..1f,
+                steps = 15,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+    }
     }
 }
 
 @Composable
 private fun SwitchRow(
-    title: String,
-    subtitle: String,
+    @StringRes titleRes: Int,
+    @StringRes subtitleRes: Int,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(titleRes), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                stringResource(subtitleRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }

@@ -14,20 +14,26 @@ import app.pinimage.util.BitmapLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.hypot
 
 class BoardCanvas(context: Context) : View(context) {
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var board: Board = Board(id = "empty", name = "")
     private var bitmaps: Map<String, android.graphics.Bitmap> = emptyMap()
     private var loadJob: Job? = null
 
     var onSelect: ((BoardObject?) -> Unit)? = null
     var onBoardChanged: ((Board) -> Unit)? = null
+    var onTransformStarted: (() -> Unit)? = null
+
+    private var freeTransformEnabled = false
 
     private val viewMatrix = Matrix()
     private val inverse = Matrix()
@@ -35,16 +41,24 @@ class BoardCanvas(context: Context) : View(context) {
     private val tmpPt = FloatArray(2)
 
     private val checkeredPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val backgroundPaint = Paint()
+    private val imagePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.BLACK
         style = Paint.Style.STROKE
         strokeWidth = 3f
     }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.BLACK
+        color = 0xFF1976D2.toInt()
         style = Paint.Style.FILL
     }
+    private val transformLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1976D2.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
     private val handleRadius = 14f
+    private val rotateHandleOffset = 46f
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
@@ -63,11 +77,12 @@ class BoardCanvas(context: Context) : View(context) {
     private var editDownY = 0f
     private var editObjStart: BoardObject? = null
     private var editHandle = 0
+    private var editStartAngle = 0f
 
-    private enum class TouchMode { Idle, Pan, Zoom, ObjectMove, ObjectResize, AwaitLongPress }
+    private enum class TouchMode { Idle, Pan, Zoom, ObjectMove, ObjectResize, ObjectRotate, AwaitLongPress }
 
     init {
-        setBackgroundColor(Color.WHITE)
+        setBackgroundColor(0xFFE5E5EA.toInt())
         val initValues = FloatArray(9)
         viewMatrix.getValues(initValues)
     }
@@ -75,6 +90,11 @@ class BoardCanvas(context: Context) : View(context) {
     fun setBoard(newBoard: Board) {
         board = newBoard
         loadBitmaps()
+        invalidate()
+    }
+
+    fun setFreeTransformEnabled(enabled: Boolean) {
+        freeTransformEnabled = enabled
         invalidate()
     }
 
@@ -99,9 +119,10 @@ class BoardCanvas(context: Context) : View(context) {
 
     private fun computeInitialFit() {
         if (width == 0 || height == 0 || board.canvasWidth == 0) return
-        val scale = minOf(width.toFloat() / board.canvasWidth, height.toFloat() / board.canvasHeight) * 0.9f
-        val dx = (width - board.canvasWidth * scale) / 2f
-        val dy = (height - board.canvasHeight * scale) / 2f
+        val bounds = board.contentBounds()
+        val scale = minOf(width.toFloat() / bounds.width, height.toFloat() / bounds.height) * 0.9f
+        val dx = (width - bounds.width * scale) / 2f - bounds.left * scale
+        val dy = (height - bounds.height * scale) / 2f - bounds.top * scale
         viewMatrix.reset()
         viewMatrix.postScale(scale, scale)
         viewMatrix.postTranslate(dx, dy)
@@ -114,13 +135,19 @@ class BoardCanvas(context: Context) : View(context) {
         canvas.save()
         canvas.concat(viewMatrix)
 
+        val bounds = board.contentBounds()
         when (board.background) {
-            BoardBackground.White -> canvas.drawColor(Color.WHITE)
-            BoardBackground.Black -> canvas.drawColor(Color.BLACK)
-            BoardBackground.Transparent -> drawTransparencyPattern(canvas)
+            BoardBackground.White -> {
+                backgroundPaint.color = Color.WHITE
+                canvas.drawRect(bounds.left, bounds.top, bounds.right, bounds.bottom, backgroundPaint)
+            }
+            BoardBackground.Black -> {
+                backgroundPaint.color = Color.BLACK
+                canvas.drawRect(bounds.left, bounds.top, bounds.right, bounds.bottom, backgroundPaint)
+            }
+            BoardBackground.Transparent -> drawTransparencyPattern(canvas, bounds)
         }
 
-        val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         board.objects.sortedBy { it.zIndex }.forEach { obj ->
             val bmp = bitmaps[obj.imageUri] ?: return@forEach
             val save = canvas.save()
@@ -128,7 +155,7 @@ class BoardCanvas(context: Context) : View(context) {
             canvas.rotate(obj.rotation)
             canvas.scale(if (obj.flipH) -1f else 1f, if (obj.flipV) -1f else 1f)
             tmpRect.set(-obj.width / 2f, -obj.height / 2f, obj.width / 2f, obj.height / 2f)
-            canvas.drawBitmap(bmp, null, tmpRect, paint)
+            canvas.drawBitmap(bmp, null, tmpRect, imagePaint)
             canvas.restoreToCount(save)
         }
 
@@ -144,22 +171,32 @@ class BoardCanvas(context: Context) : View(context) {
             canvas.drawCircle(w / 2f, -h / 2f, handleRadius, handlePaint)
             canvas.drawCircle(-w / 2f, h / 2f, handleRadius, handlePaint)
             canvas.drawCircle(w / 2f, h / 2f, handleRadius, handlePaint)
+            canvas.drawLine(0f, -h / 2f, 0f, -h / 2f - rotateHandleOffset, transformLinePaint)
+            canvas.drawCircle(0f, -h / 2f - rotateHandleOffset, handleRadius * 1.15f, handlePaint)
             canvas.restoreToCount(save)
         }
 
         canvas.restore()
     }
 
-    private fun drawTransparencyPattern(canvas: Canvas) {
+    private fun drawTransparencyPattern(canvas: Canvas, bounds: BoardContentBounds) {
         val cell = 20f
-        val cols = (board.canvasWidth / cell).toInt() + 1
-        val rows = (board.canvasHeight / cell).toInt() + 1
+        val startX = floor(bounds.left / cell).toInt()
+        val startY = floor(bounds.top / cell).toInt()
+        val endX = floor(bounds.right / cell).toInt()
+        val endY = floor(bounds.bottom / cell).toInt()
         val light = Color.LTGRAY
         val white = Color.WHITE
-        for (y in 0 until rows) {
-            for (x in 0 until cols) {
+        for (y in startY..endY) {
+            for (x in startX..endX) {
                 checkeredPaint.color = if ((x + y) % 2 == 0) white else light
-                canvas.drawRect(x * cell, y * cell, (x + 1) * cell, (y + 1) * cell, checkeredPaint)
+                canvas.drawRect(
+                    maxOf(bounds.left, x * cell),
+                    maxOf(bounds.top, y * cell),
+                    minOf(bounds.right, (x + 1) * cell),
+                    minOf(bounds.bottom, (y + 1) * cell),
+                    checkeredPaint,
+                )
             }
         }
     }
@@ -211,6 +248,15 @@ class BoardCanvas(context: Context) : View(context) {
         return mask
     }
 
+    private fun hitTestRotateHandle(obj: BoardObject, cx: Float, cy: Float): Boolean {
+        val localX = cx - (obj.x + obj.width / 2f)
+        val localY = cy - (obj.y + obj.height / 2f)
+        val rad = Math.toRadians(-obj.rotation.toDouble())
+        val rx = localX * Math.cos(rad).toFloat() - localY * Math.sin(rad).toFloat()
+        val ry = localX * Math.sin(rad).toFloat() + localY * Math.cos(rad).toFloat()
+        return hypot(rx, ry + obj.height / 2f + rotateHandleOffset) <= handleRadius * 2.5f
+    }
+
     private fun handleDown(ev: MotionEvent) {
         downX = ev.x; downY = ev.y
         panAccumX = 0f; panAccumY = 0f
@@ -219,8 +265,16 @@ class BoardCanvas(context: Context) : View(context) {
         if (selectedId != null) {
             val obj = board.objects.firstOrNull { it.id == selectedId }
             if (obj != null) {
+                if (hitTestRotateHandle(obj, cx, cy)) {
+                    onTransformStarted?.invoke()
+                    mode = TouchMode.ObjectRotate
+                    editObjStart = obj
+                    editStartAngle = angleFromCenter(obj, cx, cy)
+                    return
+                }
                 val handle = hitTestHandle(obj, cx, cy)
                 if (handle != 0) {
+                    onTransformStarted?.invoke()
                     mode = TouchMode.ObjectResize
                     editHandle = handle
                     editDownX = cx; editDownY = cy
@@ -248,6 +302,7 @@ class BoardCanvas(context: Context) : View(context) {
 
     private val longPressRunnable = Runnable {
         if (mode != TouchMode.AwaitLongPress) return@Runnable
+        onTransformStarted?.invoke()
         mode = TouchMode.ObjectMove
         val (cx, cy) = toCanvasCoords(downX, downY)
         editDownX = cx; editDownY = cy
@@ -315,23 +370,13 @@ class BoardCanvas(context: Context) : View(context) {
             TouchMode.ObjectResize -> {
                 val (cx, cy) = toCanvasCoords(ev.x, ev.y)
                 val start = editObjStart ?: return
-                var w = start.width
-                var h = start.height
-                var x = start.x
-                var y = start.y
-                val dx = cx - editDownX
-                val dy = cy - editDownY
-                if (editHandle and 2 != 0) w = (start.width + dx).coerceAtLeast(20f)
-                if (editHandle and 8 != 0) h = (start.height + dy).coerceAtLeast(20f)
-                if (editHandle and 1 != 0) {
-                    w = (start.width - dx).coerceAtLeast(20f)
-                    x = start.x + (start.width - w)
-                }
-                if (editHandle and 4 != 0) {
-                    h = (start.height - dy).coerceAtLeast(20f)
-                    y = start.y + (start.height - h)
-                }
-                updateObject(start.copy(x = x, y = y, width = w, height = h))
+                updateObject(resizedObject(start, cx - editDownX, cy - editDownY))
+            }
+            TouchMode.ObjectRotate -> {
+                val (cx, cy) = toCanvasCoords(ev.x, ev.y)
+                val start = editObjStart ?: return
+                val delta = angleFromCenter(start, cx, cy) - editStartAngle
+                updateObject(start.copy(rotation = start.rotation + delta))
             }
             TouchMode.Idle -> Unit
         }
@@ -343,7 +388,13 @@ class BoardCanvas(context: Context) : View(context) {
 
     private fun handleUp(ev: MotionEvent) {
         removeCallbacks(longPressRunnable)
+        if (mode == TouchMode.AwaitLongPress) performClick()
         mode = TouchMode.Idle
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 
     private fun updateObject(obj: BoardObject) {
@@ -351,6 +402,64 @@ class BoardCanvas(context: Context) : View(context) {
         onBoardChanged?.invoke(board)
         invalidate()
     }
+
+    private fun resizedObject(start: BoardObject, canvasDx: Float, canvasDy: Float): BoardObject {
+        val radians = Math.toRadians(-start.rotation.toDouble())
+        val cos = Math.cos(radians).toFloat()
+        val sin = Math.sin(radians).toFloat()
+        val dx = canvasDx * cos - canvasDy * sin
+        val dy = canvasDx * sin + canvasDy * cos
+        val signX = when {
+            editHandle and 2 != 0 -> 1f
+            editHandle and 1 != 0 -> -1f
+            else -> 0f
+        }
+        val signY = when {
+            editHandle and 8 != 0 -> 1f
+            editHandle and 4 != 0 -> -1f
+            else -> 0f
+        }
+        val targetWidth = if (signX == 0f) start.width else start.width + dx * signX
+        val targetHeight = if (signY == 0f) start.height else start.height + dy * signY
+        val (newWidth, newHeight) = if (freeTransformEnabled) {
+            targetWidth.coerceAtLeast(20f) to targetHeight.coerceAtLeast(20f)
+        } else {
+            val widthScale = targetWidth / start.width
+            val heightScale = targetHeight / start.height
+            val requestedScale = when {
+                signX == 0f -> heightScale
+                signY == 0f -> widthScale
+                abs(widthScale - 1f) >= abs(heightScale - 1f) -> widthScale
+                else -> heightScale
+            }
+            val minScale = maxOf(20f / start.width, 20f / start.height)
+            val scale = requestedScale.coerceAtLeast(minScale)
+            start.width * scale to start.height * scale
+        }
+
+        val oldCenterX = start.x + start.width / 2f
+        val oldCenterY = start.y + start.height / 2f
+        val fixedOldX = -signX * start.width / 2f
+        val fixedOldY = -signY * start.height / 2f
+        val fixedNewX = -signX * newWidth / 2f
+        val fixedNewY = -signY * newHeight / 2f
+        val rotation = Math.toRadians(start.rotation.toDouble())
+        val rCos = Math.cos(rotation).toFloat()
+        val rSin = Math.sin(rotation).toFloat()
+        val fixedGlobalX = oldCenterX + fixedOldX * rCos - fixedOldY * rSin
+        val fixedGlobalY = oldCenterY + fixedOldX * rSin + fixedOldY * rCos
+        val newCenterX = fixedGlobalX - (fixedNewX * rCos - fixedNewY * rSin)
+        val newCenterY = fixedGlobalY - (fixedNewX * rSin + fixedNewY * rCos)
+        return start.copy(
+            x = newCenterX - newWidth / 2f,
+            y = newCenterY - newHeight / 2f,
+            width = newWidth,
+            height = newHeight,
+        )
+    }
+
+    private fun angleFromCenter(obj: BoardObject, x: Float, y: Float): Float =
+        Math.toDegrees(kotlin.math.atan2(y - (obj.y + obj.height / 2f), x - (obj.x + obj.width / 2f)).toDouble()).toFloat()
 
     private fun span(ev: MotionEvent): Float {
         if (ev.pointerCount < 2) return 0f
@@ -362,5 +471,11 @@ class BoardCanvas(context: Context) : View(context) {
     private fun focus(ev: MotionEvent): Pair<Float, Float> {
         if (ev.pointerCount < 2) return ev.x to ev.y
         return ((ev.getX(0) + ev.getX(1)) / 2f) to ((ev.getY(0) + ev.getY(1)) / 2f)
+    }
+
+    override fun onDetachedFromWindow() {
+        loadJob?.cancel()
+        scope.cancel()
+        super.onDetachedFromWindow()
     }
 }

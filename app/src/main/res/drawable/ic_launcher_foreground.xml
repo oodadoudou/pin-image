@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#111111"
-        android:pathData="M60,28 L48,28 L48,46 L38,60 L52,60 L52,80 L56,80 L56,60 L70,60 L60,46 Z" />
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/ic_launcher_art" />
+    </item>
+</layer-list>
